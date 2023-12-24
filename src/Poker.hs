@@ -26,6 +26,7 @@ module Poker
   , parseRank
   , allCards
   , allHands
+  , displayCard
   ) where
 
 import Data.Aeson
@@ -131,15 +132,27 @@ data Card =
   Rank `Of` Suit
   deriving (Eq, Ord)
 
+parseCard :: String -> Maybe Card
+parseCard =
+  \case
+    [r, s] -> Of <$> parseRank [r] <*> parseSuit [s]
+    ['1', '0', s] -> Of R10 <$> parseSuit [s]
+    _ -> Nothing
+
+displayCard :: Card -> String
+displayCard (r `Of` s) = displayRank r ++ [displaySuit s]
+
 instance Show Card where
   show :: Card -> String
   show (r `Of` s) = "(" ++ [displaySuit s] ++ ".)" ++ show r
 
 instance FromJSON Card where
-  parseJSON = withObject "Card" $ \v -> Of <$> v .: "r" <*> v .: "s"
+  parseJSON =
+    withText "Card" $ \t ->
+      maybeToParser "could not match pattern" $ parseCard (fromText t)
 
 instance ToJSON Card where
-  toJSON (r `Of` s) = object ["r" .= r, "s" .= s]
+  toJSON c = toJSON $ displayCard c
 
 (♣) :: Suit
 (♣) = Club
