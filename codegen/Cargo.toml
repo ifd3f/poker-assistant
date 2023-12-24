@@ -1,0 +1,12 @@
+[package]
+name = "poker-assistant-codegen"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[build-dependencies]
+compact-poker = { version = "0.1.0", path = "../compact-poker" }
+itertools = "0.12.0"
+poker = "0.5.0"
+rayon = "1.8.0"
