@@ -1,4 +1,8 @@
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DeriveGeneric #-}
+
 module Poker
   ( Suit(..)
   , Rank(..)
@@ -18,14 +22,24 @@ module Poker
   , (♠.)
   , (♥.)
   , (♦.)
+  , displayRank
+  , parseRank
+  , allCards
+  , allHands
   ) where
 
+import Data.Aeson
+import Data.Aeson.Types
+import qualified Data.Char as Char
 import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Data.Maybe (maybeToList)
+import Data.Text.Conversions (fromText)
+import GHC.Generics
+import Math.Combinat
 
 data Suit
   = Club
@@ -38,11 +52,64 @@ instance Show Suit where
   show :: Suit -> String
   show s = "(" ++ [displaySuit s] ++ ")"
 
+instance FromJSON Suit where
+  parseJSON =
+    withText "Suit" $ \t ->
+      maybeToParser "failed to parse into a suit" (parseSuit $ fromText t)
+
+instance ToJSON Suit where
+  toJSON = toJSON . displaySuit
+
 displaySuit :: Suit -> Char
 displaySuit Club = '♣'
 displaySuit Spade = '♠'
 displaySuit Heart = '♥'
 displaySuit Diamond = '♦'
+
+parseSuit :: String -> Maybe Suit
+parseSuit s
+  | lc `elem` ["♣", "c"] = Just Club
+  | lc `elem` ["♠", "s"] = Just Spade
+  | lc `elem` ["♥", "h"] = Just Heart
+  | lc `elem` ["♦", "d"] = Just Diamond
+  | otherwise = Nothing
+  where
+    lc = fmap Char.toLower s
+
+displayRank :: Rank -> String
+displayRank =
+  \case
+    R2 -> "2"
+    R3 -> "3"
+    R4 -> "4"
+    R5 -> "5"
+    R6 -> "6"
+    R7 -> "7"
+    R8 -> "8"
+    R9 -> "9"
+    R10 -> "10"
+    RJ -> "J"
+    RQ -> "Q"
+    RK -> "K"
+    RA -> "A"
+
+parseRank :: String -> Maybe Rank
+parseRank =
+  \case
+    "2" -> Just R2
+    "3" -> Just R3
+    "4" -> Just R4
+    "5" -> Just R5
+    "6" -> Just R6
+    "7" -> Just R7
+    "8" -> Just R8
+    "9" -> Just R9
+    "10" -> Just R10
+    "J" -> Just RJ
+    "Q" -> Just RQ
+    "K" -> Just RK
+    "A" -> Just RA
+    _ -> Nothing
 
 data Rank
   = R2
@@ -67,6 +134,12 @@ data Card =
 instance Show Card where
   show :: Card -> String
   show (r `Of` s) = "(" ++ [displaySuit s] ++ ".)" ++ show r
+
+instance FromJSON Card where
+  parseJSON = withObject "Card" $ \v -> Of <$> v .: "r" <*> v .: "s"
+
+instance ToJSON Card where
+  toJSON (r `Of` s) = object ["r" .= r, "s" .= s]
 
 (♣) :: Suit
 (♣) = Club
@@ -101,7 +174,11 @@ suit (_ `Of` s) = s
 -- | A hand of five cards. Invariant: cards are in descending natural Card order.
 newtype Hand =
   Hand (NonEmpty Card)
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
+
+instance ToJSON Hand
+
+instance FromJSON Hand
 
 -- | Pattern of hands. Multiple of these may apply to a single hand.
 data HandPattern
@@ -113,6 +190,17 @@ data HandPattern
   | High Rank
   | HighSuit Card
   deriving (Eq, Show)
+
+instance Ord Hand where
+  l `compare` r = patterns l `compare` patterns r
+
+instance FromJSON Rank where
+  parseJSON =
+    withText "Rank" $ \t ->
+      maybeToParser "failed to parse into a rank" (parseRank $ fromText t)
+
+instance ToJSON Rank where
+  toJSON = toJSON . displayRank
 
 instance Ord HandPattern where
   compare pl pr =
@@ -177,14 +265,20 @@ patterns h@(Hand (first :| rest)) =
     highs = fmap (High . rank) cs
     bottomTiebreaker = fmap HighSuit cs
 
--- | Ranks in descending order.
+-- | Ranks in ascending order.
 rankOrder :: [Rank]
 rankOrder = [R2, R3, R4, R5, R6, R7, R8, R9, R10, RJ, RQ, RK, RA]
 
+-- | Suits in ascending order.
+suitOrder :: [Suit]
+suitOrder = [Club, Diamond, Heart, Spade]
+
 -- | Helper to make a Hand.
 makeHand :: (Card, Card, Card, Card, Card) -> Hand
-makeHand (a, b, c, d, e) =
-  Hand (NonEmpty.sortBy (flip compare) $ NonEmpty.fromList [a, b, c, d, e])
+makeHand (a, b, c, d, e) = handFromList [a, b, c, d, e]
+
+handFromList :: [Card] -> Hand
+handFromList = Hand . NonEmpty.sortBy (flip compare) . NonEmpty.fromList
 
 -- | A flush is a hand where every card is the same suit.
 -- | This function returns Nothing if it is not a flush, and the hand itself if it is.
@@ -209,5 +303,16 @@ isStraight (Hand (c :| cs)) =
 rankCounts :: [Card] -> Map Rank Int
 rankCounts h = Map.fromListWith (+) $ fmap (\c -> (rank c, 1)) h
 
-instance Ord Hand where
-  l `compare` r = patterns l `compare` patterns r
+maybeToParser :: String -> Maybe a -> Parser a
+maybeToParser err =
+  \case
+    Just x -> pure x
+    Nothing -> parseFail err
+
+-- | All 52 cards.
+allCards :: [Card]
+allCards = [r `Of` s | s <- suitOrder, r <- rankOrder]
+
+-- | All possible hands. No particular order is given.
+allHands :: [Hand]
+allHands = map handFromList $ choose 5 allCards

@@ -3,7 +3,17 @@ module Main
   ) where
 
 import Poker
+import GHC.Arr
+import qualified Data.List as List
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Lazy.Char8 as BSL
 
 main :: IO ()
 main = do
-  print (R10 `Of` Spade)
+  let cards = List.sort allHands
+  let json = Aeson.encode cards
+  BSL.putStrLn json
+  pure ()
+
+
+

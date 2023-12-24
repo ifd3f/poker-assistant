@@ -3,6 +3,12 @@ name: poker-assistant
 dependencies:
   - base == 4.*
   - containers
+  - lens
+  - aeson
+  - text
+  - combinat
+  - bytestring
+  - text-conversions
 
 executables:
   poker-assistant:
@@ -28,8 +34,6 @@ ghc-options:
 
 library:
   source-dirs: src
-  exposed-modules:
-    - Poker
 
 tests:
   poker-assistant-spec:
