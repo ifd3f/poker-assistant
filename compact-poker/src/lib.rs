@@ -12,7 +12,7 @@
 //!
 //! ```text
 //!                     +--------+
-//!                     |  ssrrrr|
+//!                     |  rrrrss|
 //!                     +--------+
 //! ```
 //!
@@ -33,13 +33,13 @@ use poker::{Card, Rank, Suit};
 use variter::VarIter;
 
 /// A reduced representation of a card.
-#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct SCard(u8);
 
 impl SCard {
     #[inline]
     pub fn new(r: Rank, s: Suit) -> Self {
-        Self((s as u8) << 4 | r as u8)
+        Self((r as u8) << 2 | s as u8)
     }
 
     #[inline]
@@ -61,22 +61,20 @@ impl SCard {
 
     #[inline]
     pub fn suit(&self) -> Suit {
-        let suit = (self.0 & 0x30) >> 4;
+        let suit = self.0 & 0x3;
         unsafe { std::mem::transmute(suit) }
     }
 
     #[inline]
     pub fn rank(&self) -> Rank {
-        let rank = self.0 & 0xf;
+        let rank = self.0 >> 2;
         unsafe { std::mem::transmute(rank) }
     }
 }
 
 impl From<Card> for SCard {
-    fn from(card: Card) -> Self {
-        let suit = card.suit() as u8;
-        let rank = (card.unique_integer() >> 8) as u8 & 0xf;
-        SCard(rank | (suit << 4))
+    fn from(c: Card) -> Self {
+        SCard::new(c.rank(), c.suit())
     }
 }
 
@@ -86,8 +84,18 @@ impl From<SCard> for Card {
     }
 }
 
+impl std::fmt::Debug for SCard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SCard")
+            .field("rank", &self.rank())
+            .field("suit", &self.suit())
+            .field("raw", &self.0)
+            .finish()
+    }
+}
+
 /// A reduced representation of a hand.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(PartialEq, Eq, Clone, Copy, Hash)]
 pub struct SHand(u32);
 
 impl SHand {
@@ -103,14 +111,15 @@ impl SHand {
 
     #[allow(overflowing_literals)]
     #[inline]
-    pub fn members(hand: u32) -> [SCard; 5] {
+    pub fn members(&self) -> [SCard; 5] {
+        let hand = self.0;
         unsafe {
             [
-                SCard::unsafe_from_raw(hand as u8),
-                SCard::unsafe_from_raw((hand >> 6) as u8),
-                SCard::unsafe_from_raw((hand >> 12) as u8),
-                SCard::unsafe_from_raw((hand >> 18) as u8),
-                SCard::unsafe_from_raw((hand >> 24) as u8),
+                SCard::unsafe_from_raw((hand & 0x3f) as u8),
+                SCard::unsafe_from_raw(((hand >> 6) & 0x3f) as u8),
+                SCard::unsafe_from_raw(((hand >> 12) & 0x3f) as u8),
+                SCard::unsafe_from_raw(((hand >> 18) & 0x3f) as u8),
+                SCard::unsafe_from_raw(((hand >> 24) & 0x3f) as u8),
             ]
         }
     }
@@ -119,25 +128,54 @@ impl SHand {
 impl From<&[SCard]> for SHand {
     #[inline]
     fn from(hand: &[SCard]) -> Self {
-        let mut shrunk = [hand[0].0, hand[1].0, hand[2].0, hand[3].0, hand[4].0];
-        shrunk.sort();
+        let mut vals = [hand[0].0, hand[1].0, hand[2].0, hand[3].0, hand[4].0];
+        vals.sort();
 
         SHand(
-            ((shrunk[4] as u32) << 24)
-                | ((shrunk[3] as u32) << 18)
-                | ((shrunk[2] as u32) << 12)
-                | ((shrunk[1] as u32) << 6)
-                | shrunk[0] as u32,
+            vals[0] as u32
+                | ((vals[1] as u32) << 6)
+                | ((vals[2] as u32) << 12)
+                | ((vals[3] as u32) << 18)
+                | (vals[4] as u32) << 24,
         )
     }
 }
 
 impl From<&[Card]> for SHand {
-    #[inline]
     fn from(hand: &[Card]) -> Self {
-        let shrunk: &[SCard] = &[hand[0].into(), hand[1].into(), hand[2].into(), hand[3].into(), hand[4].into()];
+        let shrunk: &[SCard] = &[
+            hand[0].into(),
+            hand[1].into(),
+            hand[2].into(),
+            hand[3].into(),
+            hand[4].into(),
+        ];
 
         SHand::from(shrunk)
+    }
+}
+
+impl FromIterator<SCard> for SHand {
+    #[inline]
+    fn from_iter<T: IntoIterator<Item = SCard>>(iter: T) -> Self {
+        let mut iter = iter.into_iter();
+        let shrunk: &[SCard] = &[
+            iter.next().unwrap(),
+            iter.next().unwrap(),
+            iter.next().unwrap(),
+            iter.next().unwrap(),
+            iter.next().unwrap(),
+        ];
+        SHand::from(shrunk)
+    }
+}
+
+impl std::fmt::Debug for SHand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SHand")
+            .field("raw", &self.raw())
+            .field("members", &self.members())
+            .finish()
     }
 }
 
@@ -164,8 +202,49 @@ mod tests {
 
     #[test]
     fn scards_generate_correctly() {
-        let lcs = Card::generate_deck().map(SCard::from).collect::<HashSet<_>>();
+        let lcs = Card::generate_deck()
+            .map(SCard::from)
+            .collect::<HashSet<_>>();
         let scs = SCard::deck().collect::<HashSet<_>>();
         assert_eq!(lcs, scs);
+    }
+
+    #[test]
+    fn hand_roundtrip() {
+        let orig: &[SCard] = &[
+            SCard::new(Rank::Two, Suit::Hearts),
+            SCard::new(Rank::Two, Suit::Diamonds),
+            SCard::new(Rank::Eight, Suit::Clubs),
+            SCard::new(Rank::Queen, Suit::Hearts),
+            SCard::new(Rank::King, Suit::Spades),
+        ];
+
+        let h = SHand::from(orig);
+
+        assert_eq!(h.members(), orig);
+    }
+
+    #[test]
+    fn hand_ignores_order() {
+        let a: &[SCard] = &[
+            SCard::new(Rank::Eight, Suit::Clubs),
+            SCard::new(Rank::Two, Suit::Hearts),
+            SCard::new(Rank::Queen, Suit::Hearts),
+            SCard::new(Rank::King, Suit::Spades),
+            SCard::new(Rank::Two, Suit::Diamonds),
+        ];
+        let b: &[SCard] = &[
+            SCard::new(Rank::Eight, Suit::Clubs),
+            SCard::new(Rank::Queen, Suit::Hearts),
+            SCard::new(Rank::Two, Suit::Diamonds),
+            SCard::new(Rank::King, Suit::Spades),
+            SCard::new(Rank::Two, Suit::Hearts),
+        ];
+
+        let ha = SHand::from(a);
+        let hb = SHand::from(b);
+
+        assert_eq!(ha, hb);
+        assert_eq!(ha.raw(), hb.raw());
     }
 }
