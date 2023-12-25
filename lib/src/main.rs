@@ -2,7 +2,7 @@ use compact_poker::SCard;
 use itertools::Itertools;
 use poker::{Rank, Suit};
 pub use poker_assistant_lookup::HandLookup;
-use poker_assistant_lookup::{LOOKUP, N_HANDS};
+use poker_assistant_lookup::N_HANDS;
 use prediction::{model::Player, montecarlo::SimParams};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use smallvec::smallvec;
@@ -38,7 +38,7 @@ fn main() {
         community: &community,
     };
 
-    let lookup = HandLookup::new();
+    let _lookup = HandLookup::new();
     let results = (0..n_iters)
         .into_par_iter()
         .map(|_| params.run(rand::thread_rng()))

@@ -1,8 +1,7 @@
-use std::{collections::HashMap, ops::Index};
 use lazy_static::lazy_static;
+use std::{collections::HashMap, ops::Index};
 
 use compact_poker::SHand;
-use poker::Card;
 
 const ORDERED_HANDS_RAW: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/ordered_hands.bin"));
 
@@ -50,8 +49,8 @@ impl<I: Into<SHand>> Index<I> for HandLookup {
 mod tests {
     use compact_poker::SCard;
 
-    use poker::{Rank, Suit};
     use super::*;
+    use poker::{Rank, Suit};
 
     #[test]
     fn build_reverse_lookup_works() {
@@ -60,12 +59,12 @@ mod tests {
 
     #[test]
     fn correct_number_of_hands() {
-assert_eq!(N_HANDS, 2598960);
+        assert_eq!(N_HANDS, 2598960);
     }
 
     #[test]
     fn correct_number_of_bytes() {
-assert_eq!(ORDERED_HANDS_RAW.len(), 2598960 * 4);
+        assert_eq!(ORDERED_HANDS_RAW.len(), 2598960 * 4);
     }
 
     #[test]
@@ -75,7 +74,7 @@ assert_eq!(ORDERED_HANDS_RAW.len(), 2598960 * 4);
             SCard::new(Rank::King, Suit::Spades),
             SCard::new(Rank::Queen, Suit::Spades),
             SCard::new(Rank::Jack, Suit::Spades),
-            SCard::new(Rank::Ten, Suit::Spades)
+            SCard::new(Rank::Ten, Suit::Spades),
         ];
 
         assert!(LOOKUP[hand] > 2598960 - 4);

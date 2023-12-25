@@ -1,13 +1,10 @@
 use compact_poker::{SCard, SHand};
-use itertools::Itertools;
-use poker::{Evaluator};
+
 use poker_assistant_lookup::LOOKUP;
 use rand::{seq::SliceRandom, Rng};
 use smallvec::{smallvec, SmallVec};
 
-use crate::HandLookup;
-
-use super::model::{Game, HandVec, OtherPlayer, Player};
+use super::model::{HandVec, OtherPlayer};
 
 pub struct SimParams<'a> {
     pub player: &'a OtherPlayer,
@@ -118,7 +115,7 @@ fn combos<T: Clone>(items: &[T], choose: usize) -> CombosVec<HandVec<T>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use smallvec::{smallvec, SmallVec};
+    use smallvec::smallvec;
 
     #[test]
     fn get_possible_hands_works_equal_size() {
