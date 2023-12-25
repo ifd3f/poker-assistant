@@ -91,11 +91,18 @@ impl From<SCard> for Card {
 pub struct SHand(u32);
 
 impl SHand {
+    #[inline]
     pub unsafe fn unsafe_from_raw(hand: u32) -> Self {
         SHand(hand)
     }
 
+    #[inline]
+    pub fn raw(&self) -> u32 {
+        self.0
+    }
+
     #[allow(overflowing_literals)]
+    #[inline]
     pub fn members(hand: u32) -> [SCard; 5] {
         unsafe {
             [
@@ -110,6 +117,7 @@ impl SHand {
 }
 
 impl From<&[SCard]> for SHand {
+    #[inline]
     fn from(hand: &[SCard]) -> Self {
         let mut shrunk = [hand[0].0, hand[1].0, hand[2].0, hand[3].0, hand[4].0];
         shrunk.sort();
@@ -121,6 +129,15 @@ impl From<&[SCard]> for SHand {
                 | ((shrunk[1] as u32) << 6)
                 | shrunk[0] as u32,
         )
+    }
+}
+
+impl From<&[Card]> for SHand {
+    #[inline]
+    fn from(hand: &[Card]) -> Self {
+        let shrunk: &[SCard] = &[hand[0].into(), hand[1].into(), hand[2].into(), hand[3].into(), hand[4].into()];
+
+        SHand::from(shrunk)
     }
 }
 

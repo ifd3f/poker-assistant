@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+compact-poker = { version = "0.1.0", path = "../compact-poker" }
 
 [build-dependencies]
 compact-poker = { version = "0.1.0", path = "../compact-poker" }
