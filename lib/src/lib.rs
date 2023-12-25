@@ -11,6 +11,7 @@ use crate::prediction::montecarlo::score_hand;
 
 mod prediction;
 
+/*
 fn main() {
     let player = Player {
         hole: 2,
@@ -61,3 +62,4 @@ fn main() {
         results.iter().filter(|r| r.score < my_score).count() as f32 / n_iters as f32
     );
 }
+*/
