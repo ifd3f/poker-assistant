@@ -1,10 +1,11 @@
 use compact_poker::{SCard, SHand};
 use itertools::Itertools;
 use poker::{Evaluator};
+use poker_assistant_codegen::LOOKUP;
 use rand::{seq::SliceRandom, Rng};
 use smallvec::{smallvec, SmallVec};
 
-use crate::hand_lookup::HandLookup;
+use crate::HandLookup;
 
 use super::model::{Game, HandVec, OtherPlayer, Player};
 
@@ -21,7 +22,7 @@ pub struct SimResult {
 }
 
 impl SimParams<'_> {
-    pub fn run(&self, mut rng: impl Rng, lookup: &HandLookup) -> SimResult {
+    pub fn run(&self, mut rng: impl Rng) -> SimResult {
         // Generate sampled hole
         let sampled_hole = self
             .sample_deck
@@ -33,7 +34,7 @@ impl SimParams<'_> {
         cards.extend(self.community.iter().copied());
         cards.extend(self.player.stud.iter().copied());
 
-        let (best_hand, score) = score_hand(&cards[..], lookup);
+        let (best_hand, score) = score_hand(&cards[..]);
 
         SimResult {
             sampled_hole,
@@ -44,14 +45,14 @@ impl SimParams<'_> {
 }
 
 /// Panics if provided hand is empty. Returns (card, score)
-pub fn score_hand(hand: &[SCard], lookup: &HandLookup) -> (SHand, u32) {
+pub fn score_hand(hand: &[SCard]) -> (SHand, u32) {
     let possible_hands = combos(hand, 5);
 
     possible_hands
         .into_iter()
         .map(|h| {
             let sh = SHand::from(&h[..]);
-            let score = lookup[sh];
+            let score = LOOKUP[sh];
             (sh, score)
         })
         .max_by_key(|(_h, s)| *s)

@@ -15,7 +15,7 @@
         devShells.default = with pkgs;
           mkShell {
             buildInputs =
-              [ cargo rustc rustfmt pre-commit rustPackages.clippy openssl pkg-config ];
+              [ cargo rustc rustfmt pre-commit rustPackages.clippy openssl pkg-config fontconfig ];
             RUST_SRC_PATH = rustPlatform.rustLibSrc;
           };
       });
