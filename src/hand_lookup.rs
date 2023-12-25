@@ -33,7 +33,7 @@ impl<I: Idx> Index<I> for HandLookup {
     }
 }
 
-trait Idx {
+pub trait Idx {
     fn to_shrunken_hand(self) -> u32;
 }
 
