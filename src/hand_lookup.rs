@@ -1,11 +1,11 @@
 use std::{collections::HashMap, ops::Index};
 
-use compact_poker::shrink_hand;
+use compact_poker::SHand;
 use poker::Card;
 use poker_assistant_codegen::{N_HANDS, ORDERED_HANDS_RAW};
 
 pub struct HandLookup {
-    pub map: HashMap<u32, u32, fasthash::t1ha::t1ha0::Hash64>,
+    pub map: HashMap<SHand, u32, fasthash::t1ha::t1ha0::Hash64>,
 }
 
 impl HandLookup {
@@ -15,13 +15,17 @@ impl HandLookup {
         for i in 0..N_HANDS {
             let bytes = &ORDERED_HANDS_RAW[i..i + 4];
             let hand = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-            map.insert(hand, i as u32);
+
+            // This is safe because it is guaranteed by ORDERED_HANDS_RAW.
+            unsafe {
+                map.insert(SHand::unsafe_from_raw(hand), i as u32);
+            }
         }
         Self { map }
     }
 
     pub fn get(&self, i: impl Idx) -> Option<&u32> {
-        self.map.get(&i.to_shrunken_hand())
+        self.map.get(&i.to_shand())
     }
 }
 
@@ -34,18 +38,18 @@ impl<I: Idx> Index<I> for HandLookup {
 }
 
 pub trait Idx {
-    fn to_shrunken_hand(self) -> u32;
+    fn to_shand(&self) -> SHand;
 }
 
 impl Idx for &[Card] {
-    fn to_shrunken_hand(self) -> u32 {
-        shrink_hand(self)
+    fn to_shand(&self) -> SHand {
+        SHand::from(*self)
     }
 }
 
-impl Idx for u32 {
-    fn to_shrunken_hand(self) -> u32 {
-        self
+impl Idx for SHand {
+    fn to_shand(&self) -> SHand {
+        *self
     }
 }
 
