@@ -319,7 +319,7 @@ dependencies = [
  "gzip",
  "itertools 0.12.0",
  "poker",
- "poker-assistant-codegen",
+ "poker-assistant-lookup",
  "rand 0.8.5",
  "rayon",
  "smallvec",
@@ -327,7 +327,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "poker-assistant-codegen"
+name = "poker-assistant-lookup"
 version = "0.1.0"
 dependencies = [
  "compact-poker",

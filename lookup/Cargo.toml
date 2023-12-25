@@ -1,5 +1,5 @@
 [package]
-name = "poker-assistant-codegen"
+name = "poker-assistant-lookup"
 version = "0.1.0"
 edition = "2021"
 

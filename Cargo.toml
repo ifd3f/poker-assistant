@@ -1,22 +1,4 @@
 [workspace]
-members = ["codegen", "compact-poker"]
+resolver = "2"
+members = ["lookup", "compact-poker", "lib"]
 
-[package]
-name = "poker-assistant"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-compact-poker = { version = "0.1.0", path = "compact-poker" }
-derive_more = "0.99.17"
-fasthash = "0.4.0"
-gzip = "0.1.2"
-itertools = "0.12.0"
-poker = "0.5.0"
-poker-assistant-codegen = { version = "0.1.0", path = "codegen" }
-rand = { version = "0.8.5", features = ["small_rng"] }
-rayon = "1.8.0"
-smallvec = "1.11.2"
-strum = { version = "0.25.0", features = ["derive"] }

@@ -1,8 +1,8 @@
 use compact_poker::SCard;
 use itertools::Itertools;
 use poker::{Rank, Suit};
-pub use poker_assistant_codegen::HandLookup;
-use poker_assistant_codegen::{LOOKUP, N_HANDS};
+pub use poker_assistant_lookup::HandLookup;
+use poker_assistant_lookup::{LOOKUP, N_HANDS};
 use prediction::{model::Player, montecarlo::SimParams};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use smallvec::smallvec;

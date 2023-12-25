@@ -1,7 +1,7 @@
 use compact_poker::{SCard, SHand};
 use itertools::Itertools;
 use poker::{Evaluator};
-use poker_assistant_codegen::LOOKUP;
+use poker_assistant_lookup::LOOKUP;
 use rand::{seq::SliceRandom, Rng};
 use smallvec::{smallvec, SmallVec};
 
