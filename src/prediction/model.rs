@@ -1,8 +1,8 @@
-use poker::Card;
+use compact_poker::SCard;
 use smallvec::{smallvec, SmallVec};
 
-pub const CARD_SV_SIZE: usize = 8;
-pub type HandVec = SmallVec<[Card; CARD_SV_SIZE]>;
+/// We use 7 to be able to hold a 7-card stud hand.
+pub type HandVec<C = SCard> = SmallVec<[C; 7]>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Player<Hole, Exchanged> {
@@ -17,12 +17,12 @@ pub type OtherPlayer = Player<usize, usize>;
 pub struct Game {
     pub player: ThisPlayer,
     pub opponents: SmallVec<[OtherPlayer; 8]>,
-    pub community: SmallVec<[Card; 8]>,
+    pub community: SmallVec<[SCard; 8]>,
 }
 
 impl Game {
     #[inline]
-    pub fn known_existing_cards(&self) -> impl Iterator<Item = Card> + '_ {
+    pub fn known_existing_cards(&self) -> impl Iterator<Item = SCard> + '_ {
         let player_hole = self.player.hole.iter().copied();
         let player_stud = self.player.stud.iter().copied();
         let opponent_stud = self.opponents.iter().flat_map(|p| p.stud.iter().copied());
@@ -39,7 +39,7 @@ impl Game {
 pub struct Holdem(Game);
 
 impl Holdem {
-    pub fn new(n_players: usize, player_hole: [Card; 2]) -> Self {
+    pub fn new(n_players: usize, player_hole: [SCard; 2]) -> Self {
         Holdem(Game {
             player: Player {
                 hole: smallvec![player_hole[0], player_hole[1]],
@@ -51,7 +51,7 @@ impl Holdem {
         })
     }
 
-    pub fn add_community(&mut self, cards: impl IntoIterator<Item = Card>) {
+    pub fn add_community(&mut self, cards: impl IntoIterator<Item = SCard>) {
         self.0.community.extend(cards)
     }
 
@@ -61,7 +61,7 @@ impl Holdem {
 }
 
 /*
-pub fn init_stud(n_players: usize, player_hole: Card) -> Game {
+pub fn init_stud(n_players: usize, player_hole: SCard) -> Game {
     Game {
         player: Player {
             hole: smallvec![player_hole],
@@ -72,7 +72,7 @@ pub fn init_stud(n_players: usize, player_hole: Card) -> Game {
     }
 }
 
-pub fn init_draw(n_players: usize, player_hole: [Card; 5]) -> Game {
+pub fn init_draw(n_players: usize, player_hole: [SCard; 5]) -> Game {
     Game {
         player: Player {
             hole: player_hole.into(),
