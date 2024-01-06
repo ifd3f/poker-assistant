@@ -4,45 +4,58 @@ use poker_assistant_lookup::LOOKUP;
 use rand::{seq::SliceRandom, Rng};
 use smallvec::{smallvec, SmallVec};
 
-use super::model::{HandVec, OtherPlayer};
+use super::model::{HandVec, PartialHand};
 
 pub struct SimParams<'a> {
-    pub player: &'a OtherPlayer,
+    /// Cards owned or ownable by the player.
+    ///
+    /// This is usually the set of (hole cards) + (stud cards) + (community cards)
+    ///
+    /// The undrawn field is the sum of (undrawn hole) + (undrawn stud) + (undrawn community).
+    pub player: PartialHand,
+    
+    /// Deck to sample from.
+    ///
+    /// This is usually a set of (full deck) - (known cards owned by all players) - (cards in community) - (cards known to be thrown away)
     pub sample_deck: &'a [SCard],
-    pub community: &'a [SCard],
 }
 
 pub struct SimResult {
-    pub sampled_hole: HandVec,
+    /// Cards that we randomly picked.
+    pub sampled_undrawn: HandVec,
+
+    /// Using those randomly-picked cards, the best hand we could have gotten.
     pub best_hand: SHand,
+
+    /// The absolute score of this hand.
     pub score: u32,
 }
 
 impl SimParams<'_> {
     pub fn run(&self, mut rng: impl Rng) -> SimResult {
-        // Generate sampled hole
-        let sampled_hole = self
+        // Generate sampled player cards
+        let sampled_undrawn = self
             .sample_deck
-            .choose_multiple(&mut rng, self.player.hole)
+            .choose_multiple(&mut rng, self.player.undrawn.into())
             .copied()
             .collect::<HandVec>();
 
-        let mut cards = sampled_hole.clone();
-        cards.extend(self.community.iter().copied());
-        cards.extend(self.player.stud.iter().copied());
+        // Build set of all hands we own
+        let mut cards = sampled_undrawn.clone();
+        cards.extend(self.player.drawn.iter().copied());
 
-        let (best_hand, score) = score_hand(&cards[..]);
+        let (best_hand, score) = score_superhand(&cards[..]);
 
         SimResult {
-            sampled_hole,
+            sampled_undrawn,
             best_hand,
             score,
         }
     }
 }
 
-/// Panics if provided hand is empty. Returns (card, score)
-pub fn score_hand(hand: &[SCard]) -> (SHand, u32) {
+/// Panics if provided hand is empty. Returns (hand of 5, score)
+pub fn score_superhand(hand: &[SCard]) -> (SHand, u32) {
     let possible_hands = combos(hand, 5);
 
     possible_hands
@@ -59,7 +72,9 @@ pub fn score_hand(hand: &[SCard]) -> (SHand, u32) {
 /// 21 is used because 7 choose 5 = 21.
 type CombosVec<T> = SmallVec<[T; 21]>;
 
-/// This only works for 1 <= choose <= 7.
+/// Enumerate all combinations of the provided slice. 
+///
+/// This only works for 1 <= choose <= 7. However, it should be very efficient.
 fn combos<T: Clone>(items: &[T], choose: usize) -> CombosVec<HandVec<T>> {
     if choose == items.len() {
         return smallvec![items.into()];

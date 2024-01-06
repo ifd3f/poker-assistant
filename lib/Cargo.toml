@@ -15,5 +15,6 @@ poker = "0.5.0"
 poker-assistant-lookup = { version = "0.1.0", path = "../lookup" }
 rand = { version = "0.8.5", features = ["small_rng"] }
 rayon = "1.8.0"
+serde = { version = "1.0.195", features = ["derive"] }
 smallvec = "1.11.2"
 strum = { version = "0.25.0", features = ["derive"] }

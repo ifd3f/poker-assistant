@@ -1,15 +1,6 @@
-use compact_poker::SCard;
-use itertools::Itertools;
-use poker::{Rank, Suit};
-pub use poker_assistant_lookup::HandLookup;
-use poker_assistant_lookup::N_HANDS;
-use prediction::{model::Player, montecarlo::SimParams};
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use smallvec::smallvec;
-
-use crate::prediction::montecarlo::score_hand;
-
-mod prediction;
+pub mod prediction;
+pub mod commands;
+pub mod game_repr;
 
 /*
 fn main() {
