@@ -46,9 +46,22 @@ impl<D: Default> PartialHand<D> {
     }
 }
 
-impl<D: Copy + Into<u8>> PartialHand<D> {
+impl PartialHand<u8> {
     pub fn total_cards(&self) -> u8 {
-        self.drawn.into() + self.undrawn
+        self.drawn + self.undrawn
+    }
+
+    pub fn add_cards(&mut self, cards: u8) {
+        self.drawn += cards;
+        self.undrawn -= cards;
+    }
+}
+
+impl PartialHand<HandVec> {
+    pub fn add_cards(&mut self, cards: impl IntoIterator<Item = SCard>) {
+        let initial_size = self.drawn.len();
+        self.drawn.extend(cards);
+        self.undrawn -= (self.drawn.len() - initial_size) as u8;
     }
 }
 
@@ -69,7 +82,13 @@ impl Game {
                 exchanged: smallvec![],
                 stud: PartialHand::undrawn(net_deal.stud),
             },
-            opponents: smallvec![OtherPlayer { hole: PartialHand::undrawn( net_deal.hole), exchanged: 0, stud: PartialHand::undrawn(net_deal.stud) }; n_opponents],
+            opponents: smallvec![
+                OtherPlayer {
+                    hole: PartialHand::undrawn(net_deal.hole),
+                    exchanged: 0,
+                    stud: PartialHand::undrawn(net_deal.stud)
+                }; n_opponents
+            ],
             community: PartialHand::undrawn(net_deal.community),
         }
     }
