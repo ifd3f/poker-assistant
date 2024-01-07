@@ -1,3 +1,5 @@
+use std::{iter::Sum, ops::Add};
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
@@ -20,7 +22,32 @@ pub struct Deal {
     pub community: u8,
 }
 
-pub fn standard() -> Vec<Round> {
+impl Add for Deal {
+    type Output = Deal;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Deal {
+            stud: self.stud + rhs.stud,
+            hole: self.hole + rhs.hole,
+            community: self.community + rhs.community,
+        }
+    }
+}
+
+impl Sum for Deal {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Default::default(), |a, d| a + d)
+    }
+}
+
+pub fn get_deals(rounds: impl IntoIterator<Item = Round>) -> impl IntoIterator<Item = Deal> {
+    rounds.into_iter().filter_map(|r| match r {
+        Round::Deal(d) => Some(d),
+        _ => None,
+    })
+}
+
+pub fn five_card_draw() -> Vec<Round> {
     vec![
         Round::Deal(Deal {
             hole: 5,

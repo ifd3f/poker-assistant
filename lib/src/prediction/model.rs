@@ -18,21 +18,37 @@ pub struct Player<Hole, Exchanged> {
     pub stud: PartialHand,
 }
 
-pub type ThisPlayer = Player<PartialHand, PartialHand>;
+pub type ThisPlayer = Player<PartialHand<HandVec>, HandVec>;
 pub type OtherPlayer = Player<PartialHand<u8>, usize>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PartialHand<Drawn = HandVec> {
+    /// Cards drawn so far.
     pub drawn: Drawn,
+
+    /// Cards yet to be drawn.
     pub undrawn: u8,
 }
 
-impl PartialHand {
+impl<D: Default> PartialHand<D> {
     pub fn null() -> Self {
         Self {
-            drawn: smallvec![],
+            drawn: Default::default(),
             undrawn: 0,
         }
+    }
+
+    pub fn undrawn(undrawn: u8) -> Self {
+        Self {
+            drawn: Default::default(),
+            undrawn,
+        }
+    }
+}
+
+impl<D: Copy + Into<u8>> PartialHand<D> {
+    pub fn total_cards(&self) -> u8 {
+        self.drawn.into() + self.undrawn
     }
 }
 
@@ -44,17 +60,18 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn from_deals(deals: impl IntoIterator<Item = Deal>) -> Self {
-        deals.into_iter().fold(Game::default(), |mut g, d| {
-            g.player.hole.undrawn += d.hole;
-            g.player.stud.undrawn += d.stud;
-            g.community.undrawn += d.community;
-            for p in &mut g.opponents {
-                p.hole.undrawn += d.hole;
-                p.stud.undrawn += d.stud;
-            }
-            g
-        })
+    pub fn from_deals(n_opponents: usize, deals: impl IntoIterator<Item = Deal>) -> Self {
+        let net_deal: Deal = deals.into_iter().sum();
+
+        Game {
+            player: ThisPlayer {
+                hole: PartialHand::undrawn(net_deal.hole),
+                exchanged: smallvec![],
+                stud: PartialHand::undrawn(net_deal.stud),
+            },
+            opponents: smallvec![OtherPlayer { hole: PartialHand::undrawn( net_deal.hole), exchanged: 0, stud: PartialHand::undrawn(net_deal.stud) }; n_opponents],
+            community: PartialHand::undrawn(net_deal.community),
+        }
     }
 
     #[inline]
@@ -67,5 +84,39 @@ impl Game {
             .flat_map(|p| p.stud.drawn.iter().copied());
 
         player_hole.chain(player_stud).chain(opponent_stud)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game_repr::*;
+
+    #[test]
+    fn from_deals_works_for_holdem() {
+        let game = Game::from_deals(
+            2,
+            holdem().into_iter().filter_map(|r| match r {
+                Round::Deal(d) => Some(d),
+                _ => None,
+            }),
+        );
+
+        assert_eq!(
+            game,
+            Game {
+                player: Player {
+                    hole: PartialHand::undrawn(2),
+                    exchanged: smallvec![],
+                    stud: PartialHand::undrawn(0)
+                },
+                opponents: smallvec![Player {
+                    hole: PartialHand::undrawn(2),
+                    exchanged: 0,
+                    stud: PartialHand::undrawn(0)
+                }; 2],
+                community: PartialHand::undrawn(5)
+            }
+        )
     }
 }

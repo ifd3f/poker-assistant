@@ -1,0 +1,14 @@
+[package]
+name = "poker-assistant-tui"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.4.13", features = ["derive"] }
+compact-poker = { version = "0.1.0", path = "../compact-poker" }
+poker = "0.5.0"
+poker-assistant = { version = "0.1.0", path = "../lib" }
+serde = "1.0.195"
+toml = "0.8.8"
