@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, fs::File, io::Write};
 
 use clap::{Parser};
 
@@ -15,6 +15,7 @@ pub struct Args {
 #[derive(clap::Subcommand, Clone)]
 pub enum Subcommand {
     /// Perform a simulation and output a histogram.
+    #[clap(name = "sim")]
     Simulate(SimulateArgs),
 
     /// Generate a template file.
@@ -35,6 +36,27 @@ pub struct SimulateArgs {
 pub struct TemplateArgs {
     /// File to write to
     pub file: PathBuf,
+
+    /// Template to use
+    #[clap(short = 't')]
+    pub template: BuiltinTemplates,
+}
+
+#[derive(clap::ValueEnum, Clone)]
+pub enum BuiltinTemplates {
+    FiveCardDraw,
+    FiveCardStud,
+    TexasHoldem,
+}
+
+impl BuiltinTemplates {
+    pub fn file_contents(&self) -> &'static str {
+        match self {
+            BuiltinTemplates::FiveCardDraw => include_str!("templates/five-card-draw.sexp"),
+            BuiltinTemplates::FiveCardStud => include_str!("templates/five-card-stud.sexp"),
+            BuiltinTemplates::TexasHoldem => include_str!("templates/texas-holdem.sexp"),
+        }
+    }
 }
 
 
@@ -42,8 +64,12 @@ fn main() {
     let args = Args::parse();
 
     match args.subcommand {
-        Subcommand::Simulate(_) => todo!(),
-        Subcommand::Template(_) => todo!(),
+        Subcommand::Simulate(args) => todo!(),
+        Subcommand::Template(args) => {
+            eprintln!("Writing template to {}", args.file.to_string_lossy());
+            let mut f = File::create(args.file).expect("Failed to open file");
+            write!(&mut f, "{}", args.template.file_contents()).expect("Failed to write templates to file");
+        }
     }
 }
 
