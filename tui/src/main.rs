@@ -57,8 +57,9 @@ pub struct SimulateArgs {
 
 #[derive(clap::Args, Clone)]
 pub struct TemplateArgs {
-    /// File to write to
-    pub file: PathBuf,
+    /// File to write to. If not provided, writes to stdout.
+    #[clap(short, long)]
+    pub out: Option<PathBuf>,
 
     /// Template to use
     #[clap(short = 't')]
@@ -67,16 +68,25 @@ pub struct TemplateArgs {
 
 #[derive(clap::ValueEnum, Clone)]
 pub enum BuiltinTemplates {
+    #[clap(name = "5-card-draw")]
     FiveCardDraw,
+
+    #[clap(name = "5-card-stud")]
     FiveCardStud,
+
+    #[clap(name = "7-card-stud")]
+    SevenCardStud,
+
+    #[clap(name = "texas-holdem")]
     TexasHoldem,
 }
 
 impl BuiltinTemplates {
     pub fn file_contents(&self) -> &'static str {
         match self {
-            BuiltinTemplates::FiveCardDraw => include_str!("templates/five-card-draw.sexp"),
-            BuiltinTemplates::FiveCardStud => include_str!("templates/five-card-stud.sexp"),
+            BuiltinTemplates::FiveCardDraw => include_str!("templates/5-card-draw.sexp"),
+            BuiltinTemplates::FiveCardStud => include_str!("templates/5-card-stud.sexp"),
+            BuiltinTemplates::SevenCardStud => include_str!("templates/7-card-stud.sexp"),
             BuiltinTemplates::TexasHoldem => include_str!("templates/texas-holdem.sexp"),
         }
     }
@@ -90,10 +100,14 @@ fn main() {
             simulate(args).expect("Failed to run simulation");
         }
         Subcommand::Template(args) => {
-            eprintln!("Writing template to {}", args.file.to_string_lossy());
-            let mut f = File::create(args.file).expect("Failed to open file");
-            write!(&mut f, "{}", args.template.file_contents())
-                .expect("Failed to write templates to file");
+            if let Some(p) = args.out {
+                eprintln!("Writing template to {}", p.to_string_lossy());
+                let mut f = File::create(p).expect("Failed to open file");
+                write!(&mut f, "{}", args.template.file_contents())
+                    .expect("Failed to write templates to file");
+            } else {
+                println!("{}", args.template.file_contents());
+            }
         }
     }
 }
@@ -138,10 +152,12 @@ fn simulate(args: SimulateArgs) -> anyhow::Result<()> {
 
         let mut raw_results = (0..args.samples)
             .into_par_iter()
-            .map(|_| RNG.with_borrow_mut(|rng| sim_params.run(rng).score)).collect::<Vec<_>>();
+            .map(|_| RNG.with_borrow_mut(|rng| sim_params.run(rng).score))
+            .collect::<Vec<_>>();
         raw_results.sort();
-        
-        let results = raw_results.iter()
+
+        let results = raw_results
+            .iter()
             .map(|sr| *sr as f32 / N_HANDS as f32)
             .collect::<Vec<_>>();
 
@@ -155,7 +171,16 @@ fn simulate(args: SimulateArgs) -> anyhow::Result<()> {
             .x_label_area_size(35)
             .y_label_area_size(40)
             .margin(10)
-            .caption(format!("{} (u={:.04}, s={:.04}, p50={:.04})", name, mean, var.sqrt(), p50), ("sans-serif", 25.0))
+            .caption(
+                format!(
+                    "{} (u={:.04}, s={:.04}, p50={:.04})",
+                    name,
+                    mean,
+                    var.sqrt(),
+                    p50
+                ),
+                ("sans-serif", 25.0),
+            )
             .build_cartesian_2d(
                 (0f32..1f32).step(0.01).use_round().into_segmented(),
                 0f32..max,
@@ -183,12 +208,10 @@ fn simulate(args: SimulateArgs) -> anyhow::Result<()> {
 
 pub fn collect_histogram(n_bins: usize, values: impl IntoIterator<Item = f32>) -> Vec<usize> {
     let mut bins = vec![0; n_bins];
-    let mut count = 0;
 
     for v in values {
         let bin = (v * n_bins as f32) as usize;
         bins[bin] += 1;
-        count += 1;
     }
 
     bins
