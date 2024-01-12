@@ -10,8 +10,10 @@ pub enum Round {
 }
 
 impl Round {
-    pub fn name(&self) -> Option<String> {
+    pub fn name(&self) -> Option<&str> {
         match self {
+            Round::Deal { name, .. } => name.as_deref(),
+            Round::Exchange { name, .. } => name.as_deref(),
         }
     }
 }
