@@ -1,5 +1,5 @@
-use std::collections::HashSet;
 use indexmap::IndexMap;
+use std::collections::HashSet;
 
 use compact_poker::SCard;
 use lexpr::Value;
@@ -195,10 +195,7 @@ pub fn parse_directive(exp: &Value) -> Result<Directive, ParseError> {
             Value::Symbol(dname) => match dname.as_ref() {
                 "define-cards" => Ok(Directive::DefineCards(parse_define_hand(c.cdr())?)),
                 "plot-cards" => Ok(Directive::PlotCards(parse_define_hand(c.cdr())?)),
-                "discard" => Ok(Directive::Discard(match c.cdr() {
-                    Value::String(s) => parse_cards_list(s.as_ref()),
-                    other => Err(BadDiscardExpression(other.clone())),
-                }?)),
+                "discard" => Ok(Directive::Discard(parse_discard(c.cdr())?)),
                 name => Err(UnknownDirective {
                     name: name.to_owned(),
                 }),
@@ -224,6 +221,18 @@ fn parse_define_hand(exp: &Value) -> Result<DefineHand, ParseError> {
             }
         }
         _ => Err(ParseError::BadDefineHandExpression(exp.clone())),
+    }
+}
+
+fn parse_discard(cdr: &Value) -> Result<Vec<CardsExp>, ParseError> {
+    use ParseError::*;
+
+    let args = cdr
+        .to_vec()
+        .ok_or_else(|| BadDiscardExpression(cdr.clone()))?;
+    match &args.as_slice() {
+        &[Value::String(s)] => Ok(parse_cards_list(s.as_ref())?),
+        _ => Err(BadDiscardExpression(cdr.clone())),
     }
 }
 
@@ -302,20 +311,17 @@ mod tests {
 
     #[test]
     fn parse_discard_cards() {
-        let val: Value = r#"(define-cards player "3c Td 2s")"#.parse::<Value>().unwrap();
+        let val: Value = r#"(discard "3c Td 2s")"#.parse::<Value>().unwrap();
 
         let result = parse_directive(&val).unwrap();
 
         assert_eq!(
             result,
-            Directive::DefineCards(DefineHand {
-                name: "player".into(),
-                cards: vec![
-                    SCard::new(Rank::Three, Suit::Clubs).into(),
-                    SCard::new(Rank::Ten, Suit::Diamonds).into(),
-                    SCard::new(Rank::Two, Suit::Spades).into(),
-                ]
-            })
+            Directive::Discard(vec![
+                SCard::new(Rank::Three, Suit::Clubs).into(),
+                SCard::new(Rank::Ten, Suit::Diamonds).into(),
+                SCard::new(Rank::Two, Suit::Spades).into(),
+            ])
         )
     }
 
