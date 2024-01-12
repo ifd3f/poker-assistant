@@ -1,6 +1,28 @@
-use std::{path::PathBuf, fs::File, io::Write};
+use std::{
+    cell::RefCell,
+    fs::{read_to_string, File},
+    io::Write,
+    path::PathBuf,
+};
 
-use clap::{Parser};
+use clap::Parser;
+use compact_poker::SCard;
+use dsl::{evaluate_directives, parse_program_from_str};
+use plotters::{
+    backend::BitMapBackend,
+    chart::ChartBuilder,
+    coord::ranged1d::IntoSegmentedCoord,
+    drawing::IntoDrawingArea,
+    series::Histogram,
+    style::{Color, RED, WHITE},
+};
+use poker_assistant::prediction::{
+    model::{PartialHand, Player},
+    montecarlo::SimParams,
+};
+use poker_assistant_lookup::{LOOKUP, N_HANDS};
+use rand::{rngs::SmallRng, SeedableRng};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 pub mod dsl;
 
@@ -27,8 +49,12 @@ pub struct SimulateArgs {
     /// File to simulate with
     pub file: PathBuf,
 
+    /// Output file
+    #[clap(short, long)]
+    pub out: PathBuf,
+
     /// Number of samples to simulate
-    #[clap(short = 'n')]
+    #[clap(short = 'n', default_value = "10000")]
     pub samples: u64,
 }
 
@@ -59,17 +85,97 @@ impl BuiltinTemplates {
     }
 }
 
-
 fn main() {
     let args = Args::parse();
 
     match args.subcommand {
-        Subcommand::Simulate(args) => todo!(),
+        Subcommand::Simulate(args) => {
+            simulate(args).expect("Failed to run simulation");
+        }
         Subcommand::Template(args) => {
             eprintln!("Writing template to {}", args.file.to_string_lossy());
             let mut f = File::create(args.file).expect("Failed to open file");
-            write!(&mut f, "{}", args.template.file_contents()).expect("Failed to write templates to file");
+            write!(&mut f, "{}", args.template.file_contents())
+                .expect("Failed to write templates to file");
         }
     }
 }
 
+fn simulate(args: SimulateArgs) -> anyhow::Result<()> {
+    std::thread_local! {
+        static RNG: RefCell<SmallRng> = RefCell::new(SmallRng::from_entropy());
+    }
+
+    let src = read_to_string(args.file)?;
+    let program = parse_program_from_str(&src)?;
+    let eval = evaluate_directives(&program)?;
+
+    let mut deck = SCard::deck().collect::<Vec<_>>();
+    deck.retain(|c| !eval.discarded.contains(c));
+
+    let root = BitMapBackend::new(&args.out, (640, 480)).into_drawing_area();
+    root.fill(&WHITE)?;
+
+    for (_, p) in eval.hands {
+        if !p.should_plot {
+            continue;
+        }
+
+        eprintln!("Simulating {}", p.name);
+
+        let sim_params = SimParams {
+            player: PartialHand {
+                drawn: p.known_cards.into_iter().collect(),
+                undrawn: p.n_holes as u8,
+            },
+            sample_deck: &deck,
+        };
+
+        let results = (0..args.samples)
+            .into_par_iter()
+            .map(|_| RNG.with_borrow_mut(|rng| sim_params.run(rng)))
+            .map(|sr| sr.score as f32 / N_HANDS as f32)
+            .collect::<Vec<_>>();
+
+        let histogram = collect_histogram(100, results.iter().copied());
+        let max = *histogram.iter().max().unwrap();
+
+        let mut chart = ChartBuilder::on(&root)
+            .x_label_area_size(35)
+            .y_label_area_size(40)
+            .margin(10)
+            .caption(format!("{}", p.name), ("sans-serif", 25.0))
+            .build_cartesian_2d(0..100, 0..max)?;
+
+        chart
+            .configure_mesh()
+            .disable_x_mesh()
+            .bold_line_style(WHITE.mix(0.3))
+            .y_desc("Count")
+            .x_desc("Percentile")
+            .axis_desc_style(("sans-serif", 15))
+            .draw()?;
+
+        let histogram = 
+            Histogram::vertical(&chart)
+                .style(RED.mix(0.5).filled())
+                .data(results.iter().map(|s| ((s * 100.0).round() as i32, 1)));
+
+        chart.draw_series(
+            histogram
+        )?;
+    }
+
+    Ok(())
+}
+
+pub fn collect_histogram(n_bins: usize, values: impl IntoIterator<Item = f32>) -> Vec<usize> {
+    let mut bins = vec![0; n_bins];
+
+    for v in values {
+        let bin = (v * n_bins as f32) as usize;
+        bins[bin] += 1;
+    }
+
+    bins
+}

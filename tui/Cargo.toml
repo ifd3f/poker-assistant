@@ -6,12 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.79"
 clap = { version = "4.4.13", features = ["derive"] }
 compact-poker = { version = "0.1.0", path = "../compact-poker" }
 derive_more = "0.99.17"
 lexpr = "0.2.7"
+plotters = "0.3.5"
 poker = "0.5.0"
 poker-assistant = { version = "0.1.0", path = "../lib" }
-serde = "1.0.195"
+poker-assistant-lookup = { version = "0.1.0", path = "../lookup" }
+rand = { version = "0.8.5", features = ["small_rng"] }
+rayon = "1.8.0"
 thiserror = "1.0.56"
-toml = "0.8.8"
