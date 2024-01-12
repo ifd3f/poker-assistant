@@ -11,16 +11,12 @@ use dsl::{evaluate_directives, parse_program_from_str};
 use plotters::{
     backend::BitMapBackend,
     chart::ChartBuilder,
-    coord::ranged1d::IntoSegmentedCoord,
     drawing::IntoDrawingArea,
     series::Histogram,
-    style::{Color, RED, WHITE},
+    style::{Color, RED, WHITE}, coord::{combinators::IntoLinspace, ranged1d::IntoSegmentedCoord},
 };
-use poker_assistant::prediction::{
-    model::{PartialHand, Player},
-    montecarlo::SimParams,
-};
-use poker_assistant_lookup::{LOOKUP, N_HANDS};
+use poker_assistant::prediction::{model::PartialHand, montecarlo::SimParams};
+use poker_assistant_lookup::N_HANDS;
 use rand::{rngs::SmallRng, SeedableRng};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -138,32 +134,30 @@ fn simulate(args: SimulateArgs) -> anyhow::Result<()> {
             .collect::<Vec<_>>();
 
         let histogram = collect_histogram(100, results.iter().copied());
-        let max = *histogram.iter().max().unwrap();
+        let max = *histogram.iter().max().unwrap() as f32 / args.samples as f32;
 
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(35)
             .y_label_area_size(40)
             .margin(10)
             .caption(format!("{}", p.name), ("sans-serif", 25.0))
-            .build_cartesian_2d(0..100, 0..max)?;
+            .build_cartesian_2d((0f32..1f32).step(0.01).use_round().into_segmented(), 0f32..max)?;
 
         chart
             .configure_mesh()
             .disable_x_mesh()
             .bold_line_style(WHITE.mix(0.3))
-            .y_desc("Count")
-            .x_desc("Percentile")
+            .y_desc("Density")
+            .x_desc("Quantile")
             .axis_desc_style(("sans-serif", 15))
             .draw()?;
 
-        let histogram = 
-            Histogram::vertical(&chart)
-                .style(RED.mix(0.5).filled())
-                .data(results.iter().map(|s| ((s * 100.0).round() as i32, 1)));
+        let histogram = Histogram::vertical(&chart)
+            .style(RED.mix(0.8).filled())
+            .margin(0)
+            .data(results.iter().map(|s| (*s, 1.0 / args.samples as f32)));
 
-        chart.draw_series(
-            histogram
-        )?;
+        chart.draw_series(histogram)?;
     }
 
     Ok(())
@@ -171,10 +165,12 @@ fn simulate(args: SimulateArgs) -> anyhow::Result<()> {
 
 pub fn collect_histogram(n_bins: usize, values: impl IntoIterator<Item = f32>) -> Vec<usize> {
     let mut bins = vec![0; n_bins];
+    let mut count = 0;
 
     for v in values {
         let bin = (v * n_bins as f32) as usize;
         bins[bin] += 1;
+        count += 1;
     }
 
     bins
