@@ -1,3 +1,6 @@
+use std::collections::{HashMap, HashSet};
+
+use compact_poker::SCard;
 use lexpr::Value;
 use poker::{Card, ParseCardError};
 
@@ -56,6 +59,131 @@ pub enum ParseError {
 
     #[error("Bad Discard expression {0}")]
     BadDiscardExpression(Value),
+
+    #[error("Error parsing S-expression: {0}")]
+    LexprError(#[from] lexpr::parse::Error),
+}
+
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+pub enum EvaluationError {
+    #[error("Hand already exists: {0}")]
+    HandAlreadyExists(String),
+
+    #[error("Could not find hand with name {0}")]
+    UnknownHand(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Evaluation {
+    /// Every card to remove from the sampling deck.
+    ///
+    /// This includes exchanged cards and known cards in players' hands.
+    pub discarded: HashSet<SCard>,
+
+    /// Hands in the evaluation.
+    pub hands: HashMap<String, ConcreteHand>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConcreteHand {
+    /// Whether or not this hand should get a histogram.
+    pub should_plot: bool,
+
+    /// Name of this hand.
+    pub name: String,
+    
+    /// Cards known in this hand.
+    pub known_cards: HashSet<SCard>,
+
+    /// Number of holes in the hand for the simulator to fill.
+    pub n_holes: usize,
+}
+
+pub fn evaluate_directives<'a>(
+    directives: impl IntoIterator<Item = &'a Directive>,
+) -> Result<Evaluation, EvaluationError> {
+    let mut ctx = Evaluation::default();
+    for d in directives {
+        evaluate_directive(&mut ctx, d)?;
+    }
+    Ok(ctx)
+}
+
+fn evaluate_directive(ctx: &mut Evaluation, directive: &Directive) -> Result<(), EvaluationError> {
+    match directive {
+        Directive::DefineCards(dh) => {
+            let ch = evaluate_define_hand(ctx, dh, false)?;
+            ctx.discarded.extend(&ch.known_cards);
+            ctx.hands.insert(ch.name.clone(), ch);
+        }
+        Directive::PlotCards(dh) => {
+            let ch = evaluate_define_hand(ctx, dh, true)?;
+            ctx.discarded.extend(&ch.known_cards);
+            ctx.hands.insert(ch.name.clone(), ch);
+        }
+        Directive::Discard(cards) => {
+            let (known_cards, _n_holes) = evaluate_card_exprs(ctx, cards)?;
+            ctx.discarded.extend(known_cards);
+        }
+    }
+
+    Ok(())
+}
+
+fn evaluate_define_hand(
+    ctx: &Evaluation,
+    dh: &DefineHand,
+    should_plot: bool,
+) -> Result<ConcreteHand, EvaluationError> {
+    if let Some(_) = ctx.hands.get(&dh.name) {
+        return Err(EvaluationError::HandAlreadyExists(dh.name.clone()));
+    }
+
+    let (known_cards, n_holes) = evaluate_card_exprs(ctx, dh.cards.iter())?;
+
+    Ok(ConcreteHand {
+        should_plot,
+        name: dh.name.clone(),
+        known_cards,
+        n_holes,
+    })
+}
+
+fn evaluate_card_exprs<'a>(
+    ctx: &Evaluation,
+    card_exprs: impl IntoIterator<Item = &'a CardsExp>,
+) -> Result<(HashSet<SCard>, usize), EvaluationError> {
+    let mut known_cards = HashSet::new();
+    let mut n_holes = 0;
+    for cexpr in card_exprs {
+        match cexpr {
+            CardsExp::Lit(c) => {
+                known_cards.insert((*c).into());
+            }
+            CardsExp::Hole => {
+                n_holes += 1;
+            }
+            CardsExp::Subs(ref_name) => match ctx.hands.get(ref_name) {
+                Some(hand) => {
+                    known_cards.extend(&hand.known_cards);
+                    n_holes += hand.n_holes;
+                }
+                None => Err(EvaluationError::UnknownHand(ref_name.clone()))?,
+            },
+        }
+    }
+
+    Ok((known_cards, n_holes))
+}
+
+pub fn parse_program_from_str(s: &str) -> Result<Vec<Directive>, ParseError> {
+    match lexpr::from_str(&format!("({s})"))? {
+        Value::Cons(v) => {
+            let (ds, _) = v.into_vec();
+            ds.iter().map(parse_directive).collect()
+        }
+        _ => panic!("impossible state - must be a cons because we surrounded it with parens"),
+    }
 }
 
 pub fn parse_directive(exp: &Value) -> Result<Directive, ParseError> {
@@ -124,7 +252,6 @@ fn parse_card_exp(exp: impl AsRef<str>) -> Result<CardsExp, ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use lexpr::sexp;
     use poker::*;
 
     use super::*;
@@ -152,7 +279,8 @@ mod tests {
 
     #[test]
     fn parse_define_cards() {
-        let val: Value = r#"(define-cards player "3c Td $community ? ?")"#.parse::<Value>().unwrap();
+        let val: Value =
+            r#"(define-cards player "3c Td $community ? ?")"#.parse::<Value>().unwrap();
 
         let result = parse_directive(&val).unwrap();
 
@@ -182,11 +310,69 @@ mod tests {
             Directive::DefineCards(DefineHand {
                 name: "player".into(),
                 cards: vec![
-                    Card::new(Rank::Three, Suit::Clubs).into(),
-                    Card::new(Rank::Ten, Suit::Diamonds).into(),
-                    Card::new(Rank::Two, Suit::Spades).into(),
+                    SCard::new(Rank::Three, Suit::Clubs).into(),
+                    SCard::new(Rank::Ten, Suit::Diamonds).into(),
+                    SCard::new(Rank::Two, Suit::Spades).into(),
                 ]
             })
         )
+    }
+
+    #[allow(non_snake_case)]
+    #[test]
+    fn eval_holdem_example() {
+        let program = r#"
+            (define-cards community "3c Td 2s ? ?")
+            (plot-cards self "As Kh $community")
+            (plot-cards opponents "? ? $community")
+        "#;
+
+        let result = parse_program_from_str(program).unwrap();
+        let eval = evaluate_directives(result.iter()).unwrap();
+
+        let c_3c = SCard::new(Three, Clubs);
+        let c_Td = SCard::new(Ten, Diamonds);
+        let c_As = SCard::new(Ace, Spades);
+        let c_Kh = SCard::new(King, Hearts);
+        let c_2s = SCard::new(Two, Spades);
+
+        use Rank::*;
+        use Suit::*;
+
+        let expected = Evaluation {
+            discarded: [c_3c, c_Td, c_As, c_2s, c_Kh].into(),
+            hands: [
+                (
+                    "community".into(),
+                    ConcreteHand {
+                        should_plot: false,
+                        name: "community".into(),
+                        known_cards: [c_3c, c_Td, c_2s].into(),
+                        n_holes: 2,
+                    },
+                ),
+                (
+                    "self".into(),
+                    ConcreteHand {
+                        should_plot: true,
+                        name: "self".into(),
+                        known_cards: [c_3c, c_Td, c_2s, c_As, c_Kh].into(),
+                        n_holes: 2,
+                    },
+                ),
+                (
+                    "opponents".into(),
+                    ConcreteHand {
+                        should_plot: true,
+                        name: "opponents".into(),
+                        known_cards: [c_3c, c_Td, c_2s].into(),
+                        n_holes: 4,
+                    },
+                ),
+            ]
+            .into(),
+        };
+
+        assert_eq!(eval, expected)
     }
 }
