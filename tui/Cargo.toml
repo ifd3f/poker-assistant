@@ -8,7 +8,10 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.4.13", features = ["derive"] }
 compact-poker = { version = "0.1.0", path = "../compact-poker" }
+derive_more = "0.99.17"
+lexpr = "0.2.7"
 poker = "0.5.0"
 poker-assistant = { version = "0.1.0", path = "../lib" }
 serde = "1.0.195"
+thiserror = "1.0.56"
 toml = "0.8.8"
