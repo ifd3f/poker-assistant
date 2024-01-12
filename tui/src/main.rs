@@ -11,9 +11,10 @@ use dsl::{evaluate_directives, parse_program_from_str};
 use plotters::{
     backend::BitMapBackend,
     chart::ChartBuilder,
+    coord::{combinators::IntoLinspace, ranged1d::IntoSegmentedCoord},
     drawing::IntoDrawingArea,
     series::Histogram,
-    style::{Color, RED, WHITE}, coord::{combinators::IntoLinspace, ranged1d::IntoSegmentedCoord},
+    style::{Color, RED, WHITE},
 };
 use poker_assistant::prediction::{model::PartialHand, montecarlo::SimParams};
 use poker_assistant_lookup::N_HANDS;
@@ -109,39 +110,56 @@ fn simulate(args: SimulateArgs) -> anyhow::Result<()> {
     let mut deck = SCard::deck().collect::<Vec<_>>();
     deck.retain(|c| !eval.discarded.contains(c));
 
-    let root = BitMapBackend::new(&args.out, (640, 480)).into_drawing_area();
+    let sims = eval
+        .hands
+        .into_values()
+        .filter(|p| p.should_plot)
+        .map(|p| {
+            (
+                p.name,
+                SimParams {
+                    player: PartialHand {
+                        drawn: p.known_cards.into_iter().collect(),
+                        undrawn: p.n_holes as u8,
+                    },
+                    sample_deck: &deck,
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let root = BitMapBackend::new(&args.out, (640, 240 * sims.len() as u32)).into_drawing_area();
     root.fill(&WHITE)?;
 
-    for (_, p) in eval.hands {
-        if !p.should_plot {
-            continue;
-        }
+    let regions = root.split_evenly((sims.len(), 1));
 
-        eprintln!("Simulating {}", p.name);
+    for (region, (name, sim_params)) in regions.iter().zip(&sims) {
+        eprintln!("Simulating {}", name);
 
-        let sim_params = SimParams {
-            player: PartialHand {
-                drawn: p.known_cards.into_iter().collect(),
-                undrawn: p.n_holes as u8,
-            },
-            sample_deck: &deck,
-        };
-
-        let results = (0..args.samples)
+        let mut raw_results = (0..args.samples)
             .into_par_iter()
-            .map(|_| RNG.with_borrow_mut(|rng| sim_params.run(rng)))
-            .map(|sr| sr.score as f32 / N_HANDS as f32)
+            .map(|_| RNG.with_borrow_mut(|rng| sim_params.run(rng).score)).collect::<Vec<_>>();
+        raw_results.sort();
+        
+        let results = raw_results.iter()
+            .map(|sr| *sr as f32 / N_HANDS as f32)
             .collect::<Vec<_>>();
 
         let histogram = collect_histogram(100, results.iter().copied());
         let max = *histogram.iter().max().unwrap() as f32 / args.samples as f32;
+        let mean = results.iter().copied().sum::<f32>() / results.len() as f32;
+        let var = results.iter().map(|x| (x - mean).powi(2)).sum::<f32>() / results.len() as f32;
+        let p50 = results[results.len() / 2];
 
-        let mut chart = ChartBuilder::on(&root)
+        let mut chart = ChartBuilder::on(&region)
             .x_label_area_size(35)
             .y_label_area_size(40)
             .margin(10)
-            .caption(format!("{}", p.name), ("sans-serif", 25.0))
-            .build_cartesian_2d((0f32..1f32).step(0.01).use_round().into_segmented(), 0f32..max)?;
+            .caption(format!("{} (u={:.04}, s={:.04}, p50={:.04})", name, mean, var.sqrt(), p50), ("sans-serif", 25.0))
+            .build_cartesian_2d(
+                (0f32..1f32).step(0.01).use_round().into_segmented(),
+                0f32..max,
+            )?;
 
         chart
             .configure_mesh()
