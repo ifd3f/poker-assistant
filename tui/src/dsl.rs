@@ -1,4 +1,5 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
+use indexmap::IndexMap;
 
 use compact_poker::SCard;
 use lexpr::Value;
@@ -81,7 +82,7 @@ pub struct Evaluation {
     pub discarded: HashSet<SCard>,
 
     /// Hands in the evaluation.
-    pub hands: HashMap<String, ConcreteHand>,
+    pub hands: IndexMap<String, ConcreteHand>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,7 +92,7 @@ pub struct ConcreteHand {
 
     /// Name of this hand.
     pub name: String,
-    
+
     /// Cards known in this hand.
     pub known_cards: HashSet<SCard>,
 

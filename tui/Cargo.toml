@@ -10,7 +10,9 @@ anyhow = "1.0.79"
 clap = { version = "4.4.13", features = ["derive"] }
 compact-poker = { version = "0.1.0", path = "../compact-poker" }
 derive_more = "0.99.17"
+indexmap = "2.1.0"
 lexpr = "0.2.7"
+ordered-map = "0.4.2"
 plotters = "0.3.5"
 poker = "0.5.0"
 poker-assistant = { version = "0.1.0", path = "../lib" }
