@@ -51,7 +51,7 @@ pub struct SimulateArgs {
     pub out: PathBuf,
 
     /// Number of samples to simulate
-    #[clap(short = 'n', default_value = "10000")]
+    #[clap(short = 'n', default_value = "100000")]
     pub samples: u64,
 }
 
@@ -148,14 +148,36 @@ fn simulate(args: SimulateArgs) -> anyhow::Result<()> {
     let regions = root.split_evenly((sims.len(), 1));
 
     for (region, (name, sim_params)) in regions.iter().zip(&sims) {
-        eprintln!("Simulating {} ({} possibilities)", name, sim_params.n_possibilities());
+        let n_samples = sim_params.n_possibilities().min(args.samples);
+        let mut raw_results = match args.samples {
+            n if n > sim_params.n_possibilities() => {
+                eprintln!(
+                    "Simulating {} (all {} possibilities)",
+                    name,
+                    sim_params.n_possibilities()
+                );
 
-        let n_samples = sim_params.n_possibilities();
+                sim_params
+                    .run_exhaustive()
+                    .into_par_iter()
+                    .map(|result| result.score)
+                    .collect::<Vec<_>>()
+            }
+            n => {
+                eprintln!(
+                    "Simulating {} ({}/{} possibilities)",
+                    name,
+                    n,
+                    sim_params.n_possibilities()
+                );
 
-        let mut raw_results = sim_params.run_exhaustive()
-            .into_par_iter()
-            .map(|result| result.score)
-            .collect::<Vec<_>>();
+                (0..n)
+                    .into_par_iter()
+                    .map(|_| RNG.with_borrow_mut(|mut rng| sim_params.run_sample(&mut rng)))
+                    .map(|result| result.score)
+                    .collect::<Vec<_>>()
+            }
+        };
         raw_results.sort();
 
         let results = raw_results
