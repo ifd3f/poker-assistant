@@ -1569,6 +1569,7 @@ dependencies = [
  "fasthash",
  "gzip",
  "itertools 0.12.0",
+ "num-integer",
  "poker",
  "poker-assistant-lookup",
  "rand 0.8.5",

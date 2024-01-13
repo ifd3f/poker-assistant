@@ -148,11 +148,13 @@ fn simulate(args: SimulateArgs) -> anyhow::Result<()> {
     let regions = root.split_evenly((sims.len(), 1));
 
     for (region, (name, sim_params)) in regions.iter().zip(&sims) {
-        eprintln!("Simulating {}", name);
+        eprintln!("Simulating {} ({} possibilities)", name, sim_params.n_possibilities());
 
-        let mut raw_results = (0..args.samples)
+        let n_samples = sim_params.n_possibilities();
+
+        let mut raw_results = sim_params.run_exhaustive()
             .into_par_iter()
-            .map(|_| RNG.with_borrow_mut(|rng| sim_params.run(rng).score))
+            .map(|result| result.score)
             .collect::<Vec<_>>();
         raw_results.sort();
 
@@ -162,7 +164,7 @@ fn simulate(args: SimulateArgs) -> anyhow::Result<()> {
             .collect::<Vec<_>>();
 
         let histogram = collect_histogram(100, results.iter().copied());
-        let max = *histogram.iter().max().unwrap() as f32 / args.samples as f32;
+        let max = *histogram.iter().max().unwrap() as f32 / n_samples as f32;
         let mean = results.iter().copied().sum::<f32>() / results.len() as f32;
         let var = results.iter().map(|x| (x - mean).powi(2)).sum::<f32>() / results.len() as f32;
         let p50 = results[results.len() / 2];
@@ -198,7 +200,7 @@ fn simulate(args: SimulateArgs) -> anyhow::Result<()> {
         let histogram = Histogram::vertical(&chart)
             .style(RED.mix(0.8).filled())
             .margin(0)
-            .data(results.iter().map(|s| (*s, 1.0 / args.samples as f32)));
+            .data(results.iter().map(|s| (*s, 1.0 / n_samples as f32)));
 
         chart.draw_series(histogram)?;
     }

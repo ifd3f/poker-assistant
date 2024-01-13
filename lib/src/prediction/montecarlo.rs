@@ -1,7 +1,9 @@
 use compact_poker::{SCard, SHand};
 
+use num_integer::binomial;
 use poker_assistant_lookup::LOOKUP;
 use rand::{seq::SliceRandom, Rng};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use smallvec::{smallvec, SmallVec};
 
 use super::model::{HandVec, PartialHand};
@@ -13,7 +15,7 @@ pub struct SimParams<'a> {
     ///
     /// The undrawn field is the sum of (undrawn hole) + (undrawn stud) + (undrawn community).
     pub player: PartialHand,
-    
+
     /// Deck to sample from.
     ///
     /// This is usually a set of (full deck) - (known cards owned by all players) - (cards in community) - (cards known to be thrown away)
@@ -32,7 +34,7 @@ pub struct SimResult {
 }
 
 impl SimParams<'_> {
-    pub fn run(&self, mut rng: impl Rng) -> SimResult {
+    pub fn run_sample(&self, mut rng: impl Rng) -> SimResult {
         // Generate sampled player cards
         let sampled_undrawn = self
             .sample_deck
@@ -51,6 +53,39 @@ impl SimParams<'_> {
             best_hand,
             score,
         }
+    }
+
+    pub fn n_possibilities(&self) -> u64 {
+        binomial(self.sample_deck.len() as u64, self.player.undrawn as u64)
+    }
+
+    pub fn run_exhaustive(&self) -> Vec<SimResult> {
+        if self.player.undrawn == 0 {
+            let (best_hand, score) = score_superhand(&self.player.drawn);
+
+            return vec![SimResult {
+                sampled_undrawn: smallvec![],
+                best_hand,
+                score,
+            }];
+        }
+
+        let draw_combos = combos(self.sample_deck, self.player.undrawn as usize);
+
+        draw_combos
+            .into_par_iter()
+            .map(|sampled_undrawn| {
+                let mut cards = sampled_undrawn.clone();
+                cards.extend(self.player.drawn.iter().copied());
+                let (best_hand, score) = score_superhand(&cards[..]);
+
+                SimResult {
+                    sampled_undrawn: sampled_undrawn.clone(),
+                    best_hand,
+                    score,
+                }
+            })
+            .collect()
     }
 }
 
@@ -72,7 +107,7 @@ pub fn score_superhand(hand: &[SCard]) -> (SHand, u32) {
 /// 21 is used because 7 choose 5 = 21.
 type CombosVec<T> = SmallVec<[T; 21]>;
 
-/// Enumerate all combinations of the provided slice. 
+/// Enumerate all combinations of the provided slice.
 ///
 /// This only works for 1 <= choose <= 7. However, it should be very efficient.
 fn combos<T: Clone>(items: &[T], choose: usize) -> CombosVec<HandVec<T>> {
@@ -100,6 +135,7 @@ fn combos<T: Clone>(items: &[T], choose: usize) -> CombosVec<HandVec<T>> {
     }
 
     match choose {
+        0 => (),
         1 => {
             make_for_loop!(&items[..], a);
         }
@@ -120,6 +156,15 @@ fn combos<T: Clone>(items: &[T], choose: usize) -> CombosVec<HandVec<T>> {
         }
         7 => {
             make_for_loop!(&items[..], a a a a a a a);
+        }
+        8 => {
+            make_for_loop!(&items[..], a a a a a a a a);
+        }
+        9 => {
+            make_for_loop!(&items[..], a a a a a a a a a);
+        }
+        10 => {
+            make_for_loop!(&items[..], a a a a a a a a a a);
         }
         _ => unimplemented!(),
     }
